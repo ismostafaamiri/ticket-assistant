@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <title>Qdrant Search UI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { direction: rtl; text-align: right; background: #f9fafb; }
+    .search-box { margin: 2rem auto; max-width: 1000px; }
+    .card { margin-bottom: 1rem; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); cursor: pointer; transition: transform 0.2s; }
+    .card:hover { transform: translateY(-4px); }
+    pre { background: #f1f1f1; padding: .5rem; border-radius: .5rem; max-height: 200px; overflow:auto; }
+
+    /* Chat styling */
+    .chat-bubble {
+      max-width: 85%;
+      padding: .6rem .8rem;
+      margin-bottom: .5rem;
+      border-radius: 1rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .chat-user {
+      background: #e3f2fd;
+      align-self: flex-start;
+    }
+    .chat-agent {
+      background: #f1f8e9;
+      align-self: flex-end;
+    }
+    .chat-meta {
+      font-size: .75rem;
+      color: #666;
+      margin-top: .2rem;
+    }
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="search-box">
+    <h1 class="mb-4 text-center">🔎 جستجو در تیکت‌ها</h1>
+
+    <form id="search-form" class="row g-3 align-items-end">
+      <!-- Query -->
+      <div class="col-md-4 col-sm-12">
+        <label for="query" class="form-label">عبارت جستجو</label>
+        <input type="text" id="query" class="form-control" placeholder="عبارت خود را وارد کنید...">
+      </div>
+
+      <!-- Ticket Type -->
+      <div class="col-md-2 col-sm-6">
+        <label for="ticket_type" class="form-label">نوع تیکت</label>
+        <select id="ticket_type" class="form-select">
+          <option value="all">همه نوع‌ها</option>
+          <option value="رفع عیب">رفع عیب</option>
+          <option value="پشتیبانی فنی، تغییر يا ارتقاء">پشتیبانی فنی، تغییر يا ارتقاء</option>
+          <option value="اداری و مالی">اداری و مالی</option>
+          <option value="فروش">فروش</option>
+        </select>
+      </div>
+
+      <!-- Attachments Checkbox -->
+      <div class="col-md-2 col-sm-6 d-flex align-items-center mt-2 mt-md-0">
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" id="attachments">
+          <label class="form-check-label" for="attachments">دارای الحاقات</label>
+        </div>
+      </div>
+
+      <!-- Date From -->
+      <div class="col-md-2 col-sm-6">
+        <label for="date_from" class="form-label">از تاریخ</label>
+        <input type="date" id="date_from" class="form-control">
+      </div>
+
+      <!-- Date To -->
+      <div class="col-md-2 col-sm-6">
+        <label for="date_to" class="form-label">تا تاریخ</label>
+        <input type="date" id="date_to" class="form-control">
+      </div>
+
+      <!-- Search Button -->
+      <div class="col-md-2 col-sm-12">
+        <button type="button" class="btn btn-primary w-100" onclick="search()">جستجو</button>
+      </div>
+    </form>
+
+    <div id="results" class="row mt-4"></div>
+  </div>
+</div>
+
+<!-- Chat Modal -->
+<div class="modal fade" id="chatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">💬 گفت‌وگو</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="بستن"></button>
+      </div>
+      <div class="modal-body">
+        <div id="chatContainer" class="chat-container"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let currentChat = [];
+
+async function search() {
+  const q = document.getElementById("query").value;
+  const type = document.getElementById("ticket_type").value;
+  const attachments = document.getElementById("attachments").checked ? "true" : "false";
+  const fromDate = document.getElementById("date_from").value;
+  const toDate = document.getElementById("date_to").value;
+
+  const params = new URLSearchParams({
+    q,
+    request_type: type,
+    attachments,
+    date_from: fromDate,
+    date_to: toDate
+  });
+
+  const res = await fetch(`/search?${params.toString()}`);
+  const data = await res.json();
+
+  const resultsDiv = document.getElementById("results");
+  resultsDiv.innerHTML = "";
+  if (data.length === 0) {
+    resultsDiv.innerHTML = "<p class='text-center text-muted'>هیچ نتیجه‌ای پیدا نشد.</p>";
+    return;
+  }
+
+  data.forEach(item => {
+    const col = document.createElement("div");
+    col.className = "col-md-6 col-lg-4";
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.onclick = () => showChat(item);
+
+    card.innerHTML = `
+      <div class="card-body">
+        <h5 class="card-title">شناسه: ${item.id}</h5>
+        <h6 class="card-subtitle mb-2 text-muted">
+          امتیاز: ${item.score.toFixed(3)} | نوع: ${item.payload?.ticket_type || "-"}
+        </h6>
+        <p class="card-text">
+          <pre>${JSON.stringify(item.payload, null, 2)}</pre>
+        </p>
+      </div>
+    `;
+    col.appendChild(card);
+    resultsDiv.appendChild(col);
+  });
+}
+
+function showChat(item) {
+  const chat = item.payload?.chat || [];
+  const container = document.getElementById("chatContainer");
+  container.innerHTML = "";
+
+  if (chat.length === 0) {
+    container.innerHTML = "<p class='text-muted text-center'>هیچ گفت‌وگویی وجود ندارد.</p>";
+  } else {
+    chat.forEach(turn => {
+      const metaText = turn["متادیتا"] || "";
+      const isCustomer = metaText.includes("IS");
+
+      const bubble = document.createElement("div");
+      bubble.className = "chat-bubble";
+      bubble.style.background = isCustomer ? "#e3f2fd" : "#f1f8e9"; // blue for IS, green for others
+      bubble.innerText = turn["متن"];
+
+      const meta = document.createElement("div");
+      meta.className = "chat-meta";
+      meta.innerText = metaText;
+
+      const wrapper = document.createElement("div");
+      wrapper.style.display = "flex";
+      wrapper.style.flexDirection = "column";
+      wrapper.style.alignItems = isCustomer ? "flex-start" : "flex-end";
+
+      wrapper.appendChild(bubble);
+      wrapper.appendChild(meta);
+      container.appendChild(wrapper);
+    });
+  }
+
+  const modal = new bootstrap.Modal(document.getElementById('chatModal'));
+  modal.show();
+}
+</script>
+
+</body>
+</html>
