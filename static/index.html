@@ -46,43 +46,55 @@
     <h1 class="mb-4 text-center">🔎 جستجو در تیکت‌ها</h1>
 
     <form id="search-form" class="row g-3 align-items-end">
+      <div class="row">
+        <div class="col-md-5 col-sm-12">
+          <label for="query" class="form-label">عبارت جستجو</label>
+          <input type="text" id="query" class="form-control" placeholder="عبارت خود را وارد کنید...">
+        </div>
+
+        <!-- Ticket Type -->
+        <div class="col-md-3 col-sm-6">
+          <label for="ticket_type" class="form-label">نوع تیکت</label>
+          <select id="ticket_type" class="form-select">
+            <option value="all">همه نوع‌ها</option>
+            <option value="رفع عیب">رفع عیب</option>
+            <option value="پشتیبانی فنی، تغییر يا ارتقاء">پشتیبانی فنی، تغییر يا ارتقاء</option>
+            <option value="اداری و مالی">اداری و مالی</option>
+            <option value="فروش">فروش</option>
+          </select>
+        </div>
+
+        <!-- Attachments Checkbox -->
+        <div class="col-md-2 col-sm-6 d-flex align-items-center mt-2 mt-md-0">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="attachments">
+            <label class="form-check-label" for="attachments">دارای الحاقات</label>
+          </div>
+
+        </div>
+        <div class="col-md-2 col-sm-6 d-flex align-items-center mt-2 mt-md-0">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="is_internal">
+            <label class="form-check-label" for="is_internal">داخلی</label>
+          </div>
+        </div>
+      </div>
       <!-- Query -->
-      <div class="col-md-4 col-sm-12">
-        <label for="query" class="form-label">عبارت جستجو</label>
-        <input type="text" id="query" class="form-control" placeholder="عبارت خود را وارد کنید...">
-      </div>
+      
+      <div class="row">
+        <!-- Date From -->
+        <div class="col-md-2 col-sm-6">
+          <label for="date_from" class="form-label">از تاریخ</label>
+          <input type="date" id="date_from" class="form-control">
+        </div>
 
-      <!-- Ticket Type -->
-      <div class="col-md-2 col-sm-6">
-        <label for="ticket_type" class="form-label">نوع تیکت</label>
-        <select id="ticket_type" class="form-select">
-          <option value="all">همه نوع‌ها</option>
-          <option value="رفع عیب">رفع عیب</option>
-          <option value="پشتیبانی فنی، تغییر يا ارتقاء">پشتیبانی فنی، تغییر يا ارتقاء</option>
-          <option value="اداری و مالی">اداری و مالی</option>
-          <option value="فروش">فروش</option>
-        </select>
-      </div>
-
-      <!-- Attachments Checkbox -->
-      <div class="col-md-2 col-sm-6 d-flex align-items-center mt-2 mt-md-0">
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" id="attachments">
-          <label class="form-check-label" for="attachments">دارای الحاقات</label>
+        <!-- Date To -->
+        <div class="col-md-2 col-sm-6">
+          <label for="date_to" class="form-label">تا تاریخ</label>
+          <input type="date" id="date_to" class="form-control">
         </div>
       </div>
 
-      <!-- Date From -->
-      <div class="col-md-2 col-sm-6">
-        <label for="date_from" class="form-label">از تاریخ</label>
-        <input type="date" id="date_from" class="form-control">
-      </div>
-
-      <!-- Date To -->
-      <div class="col-md-2 col-sm-6">
-        <label for="date_to" class="form-label">تا تاریخ</label>
-        <input type="date" id="date_to" class="form-control">
-      </div>
 
       <!-- Search Button -->
       <div class="col-md-2 col-sm-12">
@@ -117,13 +129,15 @@ async function search() {
   const q = document.getElementById("query").value;
   const type = document.getElementById("ticket_type").value;
   const attachments = document.getElementById("attachments").checked ? "true" : "false";
+  const is_internal = document.getElementById("is_internal").checked ? "true" : "false";
   const fromDate = document.getElementById("date_from").value;
   const toDate = document.getElementById("date_to").value;
-
+  console.log(is_internal)
   const params = new URLSearchParams({
     q,
     request_type: type,
     attachments,
+    is_internal,
     date_from: fromDate,
     date_to: toDate
   });
@@ -146,17 +160,59 @@ async function search() {
     card.className = "card";
     card.onclick = () => showChat(item);
 
-    card.innerHTML = `
-      <div class="card-body">
-        <h5 class="card-title">شناسه: ${item.id}</h5>
-        <h6 class="card-subtitle mb-2 text-muted">
-          امتیاز: ${item.score.toFixed(3)} | نوع: ${item.payload?.ticket_type || "-"}
-        </h6>
-        <p class="card-text">
-          <pre>${JSON.stringify(item.payload, null, 2)}</pre>
-        </p>
-      </div>
-    `;
+// Helper functions
+function booleanIcon(value, icon) {
+  return value ? icon : '';
+}
+
+function stateBadge(state) {
+  const color = state === "باز" ? "success" : "secondary"; // green for open, gray for closed
+  return `<span class="badge bg-${color} me-1">${state}</span>`;
+}
+
+function typeBadge(type) {
+  return `<span class="badge bg-primary me-1">${type}</span>`;
+}
+
+function idBadge(id) {
+  return `<span class="badge bg-info me-1">#${id}</span>`;
+}
+
+// Build card HTML
+card.innerHTML = `
+  <div class="card-body">
+    <h5 class="card-title">${item.payload.summary || 'بدون عنوان'}</h5>
+    <h6 class="card-subtitle mb-2 text-muted">
+      امتیاز: ${item.score.toFixed(3)} | نوع: ${item.payload?.ticket_type || "-"}
+    </h6>
+    
+    <!-- Badges -->
+    <div class="mb-2">
+      ${stateBadge(item.payload.state)}
+      ${typeBadge(item.payload.request_type)}
+      ${idBadge(item.payload.ticket_id)}
+    </div>
+
+    <!-- Icons -->
+    <div class="mb-2">
+      ${booleanIcon(item.payload.attachments, '📎')}
+      ${booleanIcon(item.payload.is_internal, '🗄️')}
+    </div>
+
+    <!-- Other fields -->
+    <ul class="list-group list-group-flush">
+      ${Object.entries(item.payload)
+        .filter(([key]) => !["chat", "text", "state_change","plan", "date", "state", "request_type", "ticket_id", "access", "attachments", "is_internal", "last_changes", "customer_seen", "ticket_type", "summary"].includes(key))
+        .map(([key, value]) => `
+          <li class="list-group-item">
+            ${value || "-"}
+          </li>
+        `)
+        .join("")}
+    </ul>
+  </div>
+`;
+
     col.appendChild(card);
     resultsDiv.appendChild(col);
   });

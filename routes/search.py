@@ -41,8 +41,10 @@ async def home():
 async def search(q: str,
                  request_type: str = None,
                  attachments: str = None,
+                 is_internal: str = None,
                  date_from: str = None,
                  date_to: str = None):
+    print(date_from)
     query_emb = embed_model.embeddings.create(
         model="openai/E5",
         input=q
@@ -51,14 +53,22 @@ async def search(q: str,
     must_conditions = []
 
     # attachments filter
-    if attachments and attachments != "all":
+    if attachments == "true":
         must_conditions.append(
             models.FieldCondition(
                 key="attachments",
-                match=models.MatchValue(value=(attachments == "true"))
+                match=models.MatchValue(value=True)
             )
         )
 
+    # attachments filter
+    if is_internal == "true":
+        must_conditions.append(
+            models.FieldCondition(
+                key="is_internal",
+                match=models.MatchValue(value=True)
+            )
+        )
     # ticket type filter
     if request_type and request_type != "all":
         must_conditions.append(
@@ -77,17 +87,27 @@ async def search(q: str,
             range_filter["lte"] = date_to
         must_conditions.append(
             models.FieldCondition(
-                key="created_at",
-                range=models.Range(**range_filter)
+                key="date",
+                range=models.DatetimeRange(**range_filter)
             )
         )
-
+    print(must_conditions)
     hits = client.query_points(
         collection_name=QDRANT_COLLECTION_NAME,
         prefetch=[
             models.Prefetch(
             query=models.SparseVector(**sparse_vectors.as_object()),
             using="multi_bm25",
+            limit=100,
+            ),
+            models.Prefetch(
+            query=models.SparseVector(**sparse_vectors.as_object()),
+            using="bm25",
+            limit=50,
+            ),
+            models.Prefetch(
+            query=query_emb,
+            using="multi_e5",
             limit=50,
             ),
         ],

@@ -10,5 +10,7 @@ dependencies = [
     "openai>=2.1.0",
     "python-decouple>=3.8",
     "qdrant-client>=1.15.1",
+    "scikit-learn>=1.7.2",
+    "seaborn>=0.13.2",
     "uvicorn>=0.37.0",
 ]
