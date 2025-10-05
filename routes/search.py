@@ -114,14 +114,17 @@ async def search(q: str,
         query=query_emb,
         using="e5",
         query_filter=Filter(must=must_conditions) if must_conditions else None,
-        limit=9
+        limit=10
     )
-    results = [
-        {
-            "id": hit.id,
-            "score": hit.score,
-            "payload": hit.payload
-        }
-        for hit in hits.points
-    ]
-    return JSONResponse(content=results)
+    results = []
+    ticket_ids = set()
+    for point in hits.points:
+        if point.payload['ticket_id'] not in ticket_ids:
+            ticket_ids.add(point.payload['ticket_id'])
+            results.append({
+            "id": point.id,
+            "score": point.score,
+            "payload": point.payload
+        })
+
+    return JSONResponse(content=results[:9])
