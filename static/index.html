@@ -38,6 +38,40 @@
       flex-direction: column;
       gap: .5rem;
     }
+
+    .skeleton-card {
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e4e4e4 37%, #f0f0f0 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.skeleton-img {
+  height: 120px;
+  width: 100%;
+}
+
+.skeleton-text {
+  height: 14px;
+  width: 80%;
+}
+
+.skeleton-text.short {
+  width: 50%;
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
   </style>
 </head>
 <body>
@@ -82,6 +116,10 @@
       <!-- Query -->
       
       <div class="row">
+        <div class="col-md-5 col-sm-12">
+          <label for="ticket_id" class="form-label">شماره تیکت</label>
+          <input type="text" id="ticket_id" class="form-control" placeholder="شماره تیکت">
+        </div>
         <!-- Date From -->
         <div class="col-md-2 col-sm-6">
           <label for="date_from" class="form-label">از تاریخ</label>
@@ -97,11 +135,14 @@
 
 
       <!-- Search Button -->
+      <div>
+        <textarea id="true_tickets" rows="2" width="100%" placeholder="شماره تیکت های درست" class="col-md-12 col-sm-12"></textarea>
+      </div>
       <div class="col-md-2 col-sm-12">
         <button type="button" class="btn btn-primary w-100" onclick="search()">جستجو</button>
       </div>
     </form>
-
+    <div id="metrics" class="row mt-4"></div>
     <div id="results" class="row mt-4"></div>
   </div>
 </div>
@@ -125,40 +166,40 @@
 <script>
 let currentChat = [];
 
-async function search() {
-  const q = document.getElementById("query").value;
-  const type = document.getElementById("ticket_type").value;
-  const attachments = document.getElementById("attachments").checked ? "true" : "false";
-  const is_internal = document.getElementById("is_internal").checked ? "true" : "false";
-  const fromDate = document.getElementById("date_from").value;
-  const toDate = document.getElementById("date_to").value;
-  console.log(is_internal)
-  const params = new URLSearchParams({
-    q,
-    request_type: type,
-    attachments,
-    is_internal,
-    date_from: fromDate,
-    date_to: toDate
-  });
-
-  const res = await fetch(`/search?${params.toString()}`);
-  const data = await res.json();
-
+function showSkeletons(total = 9) {
   const resultsDiv = document.getElementById("results");
-  resultsDiv.innerHTML = "";
-  if (data.length === 0) {
-    resultsDiv.innerHTML = "<p class='text-center text-muted'>هیچ نتیجه‌ای پیدا نشد.</p>";
-    return;
+  let skeletonHTML = '';
+  const perRow = 3;
+
+  for (let i = 0; i < total; i++) {
+    // Start a new row every 3 cards
+    if (i % perRow === 0) {
+      skeletonHTML += `<div class="row mb-3">`;
+    }
+
+    skeletonHTML += `
+      <div class="col-md-4 mb-3">
+        <div class="skeleton-card">
+          <div class="skeleton skeleton-img"></div>
+          <div class="skeleton skeleton-text"></div>
+          <div class="skeleton skeleton-text short"></div>
+        </div>
+      </div>
+    `;
+
+    // Close the row after 3 cards
+    if ((i + 1) % perRow === 0) {
+      skeletonHTML += `</div>`;
+    }
   }
 
-  data.forEach(item => {
-    const col = document.createElement("div");
-    col.className = "col-md-6 col-lg-4";
+  // In case total is not a multiple of perRow (not needed for 9, but good practice)
+  if (total % perRow !== 0) {
+    skeletonHTML += `</div>`;
+  }
 
-    const card = document.createElement("div");
-    card.className = "card";
-    card.onclick = () => showChat(item);
+  document.querySelector('#results').innerHTML = skeletonHTML;
+}
 
 // Helper functions
 function booleanIcon(value, icon) {
@@ -170,6 +211,27 @@ function stateBadge(state) {
   return `<span class="badge bg-${color} me-1">${state}</span>`;
 }
 
+function categoryBadge(type) {
+  let colorClass = "bg-secondary"; // default
+
+  switch (type) {
+    case "رفع عیب":
+      colorClass = "bg-danger"; // red
+      break;
+    case "پشتیبانی فنی، تغییر يا ارتقاء":
+      colorClass = "bg-info"; // light blue
+      break;
+    case "اداری و مالی":
+      colorClass = "bg-warning text-dark"; // yellow with dark text
+      break;
+    case "فروش":
+      colorClass = "bg-success"; // green
+      break;
+  }
+
+  return `<span class="badge ${colorClass} me-1">${type}</span>`;
+}
+
 function typeBadge(type) {
   return `<span class="badge bg-primary me-1">${type}</span>`;
 }
@@ -178,45 +240,115 @@ function idBadge(id) {
   return `<span class="badge bg-info me-1">#${id}</span>`;
 }
 
-// Build card HTML
-card.innerHTML = `
-  <div class="card-body">
-    <h5 class="card-title">${item.payload.summary || 'بدون عنوان'}</h5>
-    <h6 class="card-subtitle mb-2 text-muted">
-      امتیاز: ${item.score.toFixed(3)} | نوع: ${item.payload?.ticket_type || "-"}
-    </h6>
-    
-    <!-- Badges -->
-    <div class="mb-2">
-      ${stateBadge(item.payload.state)}
-      ${typeBadge(item.payload.request_type)}
-      ${idBadge(item.payload.ticket_id)}
-    </div>
+async function search() {
+  const q = document.getElementById("query").value;
+  const ticket_id = document.getElementById("ticket_id").value;
+  const type = document.getElementById("ticket_type").value;
+  const attachments = document.getElementById("attachments").checked ? "true" : "false";
+  const is_internal = document.getElementById("is_internal").checked ? "true" : "false";
+  const fromDate = document.getElementById("date_from").value;
+  const toDate = document.getElementById("date_to").value;
+  const trueTickets = document.getElementById("true_tickets").value;
+  
+  const params = new URLSearchParams({
+    q,
+    request_type: type,
+    attachments,
+    is_internal,
+    ticket_id,
+    date_from: fromDate,
+    date_to: toDate,
+    true_tickets: trueTickets
+  });
 
-    <!-- Icons -->
-    <div class="mb-2">
-      ${booleanIcon(item.payload.attachments, '📎')}
-      ${booleanIcon(item.payload.is_internal, '🗄️')}
-    </div>
-
-    <!-- Other fields -->
-    <ul class="list-group list-group-flush">
-      ${Object.entries(item.payload)
-        .filter(([key]) => !["chat", "text", "state_change","plan", "date", "state", "request_type", "ticket_id", "access", "attachments", "is_internal", "last_changes", "customer_seen", "ticket_type", "summary"].includes(key))
-        .map(([key, value]) => `
-          <li class="list-group-item">
-            ${value || "-"}
-          </li>
-        `)
-        .join("")}
-    </ul>
+  showSkeletons(); // show skeleton placeholders
+  const res = await fetch(`/search?${params.toString()}`);
+  const data = await res.json();
+  
+  const resultsDiv = document.getElementById("results");
+  const metricsDiv = document.getElementById("metrics");
+  
+  if (data.length === 0) {
+    resultsDiv.innerHTML = "<p class='text-center text-muted'>هیچ نتیجه‌ای پیدا نشد.</p>";
+    return;
+  }
+  metricsDiv.innerHTML = `
+  <div class="mb-2">
+  Precision@10: ${typeBadge(data.metrics.precision_at_10)}
   </div>
-`;
+  <div class="mb-2">
+  Recall@10: ${typeBadge(data.metrics.Recall_at_10)}
+  </div>`
+  resultsDiv.innerHTML = "";
+  data.results.forEach(item => {
+    const col = document.createElement("div");
+    col.className = "col-md-6 col-lg-4";
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.onclick = () => showChat(item);
+
+
+    // Build card HTML
+    card.innerHTML = `
+      <div class="card-body">
+        <h5 class="card-title" id="card-title">${item.payload.summary || 'بدون عنوان'}</h5>
+
+      <div class="progress mb-2" style="height: 6px;">
+        <div 
+          class="progress-bar bg-primary" 
+          role="progressbar" 
+          style="width: ${item.score * 100}%;" 
+          aria-valuenow="${item.score * 100}" 
+          aria-valuemin="0" 
+          aria-valuemax="100">
+        </div>
+        </div>
+        <small class="text-muted">امتیاز: ${item.score.toFixed(3)}</small>
+        
+        <!-- Badges -->
+        <div class="mb-2">
+          ${stateBadge(item.payload.state)}
+          ${categoryBadge(item.payload.request_type)}
+          ${typeBadge(item.payload.access)}
+          <a href="https://iransamaneh.com/admin/modules/crm/tickets/view.php?id=${item.payload.ticket_id}" target="_blank" class="text-blue-600 underline">
+            ${idBadge(item.payload.ticket_id)}
+          </a>
+        </div>
+
+        <!-- Icons -->
+        <div class="mb-2">
+          ${booleanIcon(item.payload.attachments, '📎')}
+          ${booleanIcon(item.payload.is_internal, '🗄️')}
+        </div>
+
+        <!-- Other fields -->
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item" style="display: flex;justify-content: space-between;">
+            <span>وضعیت</span>
+            <span><strong>${item.payload.state}</strong></span>
+          </li >
+          <li class="list-group-item" style="display: flex;justify-content: space-between;">
+            <span>تاریخ</span>
+            <span><strong>${item.payload.metadata.split("-")[0] || "-"}</strong></span>
+          </li >
+          <li class="list-group-item" style="display: flex;justify-content: space-between;">
+            <span>اقدام کننده</span>
+            <span><strong>${item.payload.actioner || "-"}</strong></span>
+          </li >
+
+        </ul>
+      </div>
+    `;
 
     col.appendChild(card);
+    
     resultsDiv.appendChild(col);
   });
+
 }
+
+
 
 function showChat(item) {
   const chat = item.payload?.chat || [];

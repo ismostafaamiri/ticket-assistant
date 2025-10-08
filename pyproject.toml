@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.118.0",
     "fastembed>=0.7.3",
+    "numpy>=2.3.3",
     "openai>=2.1.0",
     "python-decouple>=3.8",
     "qdrant-client>=1.15.1",
